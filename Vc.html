@@ -217,6 +217,13 @@ async function createPeerConnection() {
 
   pc.oniceconnectionstatechange = () => log("ICE state: " + pc.iceConnectionState);
   pc.onconnectionstatechange = () => log("Connection state: " + pc.connectionState);
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      log("Found candidate: " + e.candidate.type + " (" + e.candidate.protocol + ")");
+    } else {
+      log("Candidate gathering finished (null candidate)");
+    }
+  };
 
   pc.ontrack = (e) => {
     const tracks = e.streams[0].getAudioTracks();
@@ -236,9 +243,18 @@ async function createPeerConnection() {
 
 function waitForIceGathering() {
   return new Promise((resolve) => {
+    log("ICE gathering state: " + pc.iceGatheringState);
     if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    const timeout = setTimeout(() => {
+      log("ICE gathering timed out after 5s, proceeding with " + pc.iceGatheringState + " candidates anyway");
+      resolve();
+    }, 5000);
     pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') resolve();
+      log("ICE gathering state: " + pc.iceGatheringState);
+      if (pc.iceGatheringState === 'complete') {
+        clearTimeout(timeout);
+        resolve();
+      }
     });
   });
 }
