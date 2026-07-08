@@ -135,6 +135,33 @@ let localStream;
 let currentCall;
 let muted = false;
 
+const XIRSYS_IDENT = "pokemore";
+const XIRSYS_SECRET = "1ad741e2-7a81-11f1-9963-0242ac150002";
+const XIRSYS_CHANNEL = "channel1adca0d8";
+
+async function getIceServers() {
+  try {
+    const resp = await fetch("https://global.xirsys.net/_turn/" + XIRSYS_CHANNEL, {
+      method: "PUT",
+      headers: {
+        "Authorization": "Basic " + btoa(XIRSYS_IDENT + ":" + XIRSYS_SECRET),
+        "Content-Type": "application/json"
+      }
+    });
+    const data = await resp.json();
+    if (data.s === "ok" && data.v && data.v.iceServers) {
+      log("Xirsys credentials fetched OK");
+      return [data.v.iceServers];
+    } else {
+      log("Xirsys response unexpected: " + JSON.stringify(data));
+      return [{ urls: 'stun:stun.l.google.com:19302' }];
+    }
+  } catch (e) {
+    log("Xirsys fetch FAILED: " + e.message);
+    return [{ urls: 'stun:stun.l.google.com:19302' }];
+  }
+}
+
 enterBtn.addEventListener('click', async () => {
   if (passInput.value.trim().toLowerCase() !== PASSWORD) {
     statusEl.textContent = "Wrong password.";
@@ -156,7 +183,7 @@ enterBtn.addEventListener('click', async () => {
 
 retryBtn.addEventListener('click', connect);
 
-function connect() {
+async function connect() {
   statusEl.textContent = "Connecting to server...";
   retryBtn.style.display = 'none';
 
@@ -165,28 +192,12 @@ function connect() {
   }
 
   // Try to become the host of the fixed room first
+  const iceServers = await getIceServers();
+  log("Using " + iceServers.length + " ICE servers from Xirsys");
   peer = new Peer(ROOM_ID, {
     debug: 1,
     config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ],
+      iceServers: iceServers,
       iceTransportPolicy: 'relay'
     }
   });
@@ -220,32 +231,16 @@ function connect() {
   });
 }
 
-function joinAsCaller() {
+async function joinAsCaller() {
   statusEl.textContent = "Joining call...";
   log("Room taken. Joining as caller instead...");
   peer.destroy();
+  const iceServers2 = await getIceServers();
+  log("Using " + iceServers2.length + " ICE servers from Xirsys");
   peer = new Peer({
     debug: 1,
     config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ],
+      iceServers: iceServers2,
       iceTransportPolicy: 'relay'
     }
   });
