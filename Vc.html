@@ -17,33 +17,26 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     font-family: Arial, Helvetica, sans-serif;
     text-align: center;
     padding: 20px;
   }
-  h1 {
-    font-weight: normal;
-    font-size: 20px;
-    margin: 0 0 20px 0;
-  }
-  #status {
-    color: #aaaaaa;
-    margin-bottom: 20px;
-    min-height: 20px;
-    font-size: 14px;
-  }
-  input {
-    padding: 14px;
-    font-size: 18px;
+  h1 { font-weight: normal; font-size: 20px; margin: 10px 0 20px 0; }
+  #status { color: #aaaaaa; margin-bottom: 15px; min-height: 20px; font-size: 14px; }
+  input, textarea {
+    padding: 12px;
+    font-size: 16px;
     border-radius: 8px;
     border: 1px solid #444444;
     background: #1a1a1a;
     color: #eeeeee;
-    width: 200px;
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
+    width: 100%;
+    max-width: 320px;
   }
+  textarea { font-size: 12px; height: 80px; text-align: left; resize: none; }
   button {
     padding: 12px 22px;
     border-radius: 20px;
@@ -52,12 +45,19 @@
     cursor: pointer;
     margin: 6px;
     color: #ffffff;
+    background: #3498db;
   }
-  #enterBtn { background: #3498db; }
-  #hangupBtn { background: #e74c3c; }
-  #muteBtn { background: #333333; border: 1px solid #555555; color: #eeeeee; }
-  #muteBtn.muted { background: #e67e22; }
-  #callControls { margin-top: 20px; }
+  button.danger { background: #e74c3c; }
+  button.secondary { background: #333333; border: 1px solid #555555; }
+  button.secondary.muted { background: #e67e22; }
+  button.orange { background: #f39c12; }
+  .step { display:none; width:100%; max-width:340px; }
+  .step p { margin: 0 0 8px 0; font-size: 13px; color: #999999; }
+  #diag {
+    font-size: 13px; color: #2ecc71; margin-top: 15px; max-width: 340px;
+    border: 1px solid #333333; border-radius: 8px; padding: 10px;
+    text-align: left; white-space: pre-wrap; width: 100%;
+  }
 </style>
 </head>
 <body>
@@ -71,34 +71,85 @@
   <button id="enterBtn">Enter</button>
 </div>
 
-<div id="callControls" style="display:none;">
-  <button id="hangupBtn">Hang Up</button>
-  <button id="muteBtn">Mute</button>
+<div id="chooseSection" class="step">
+  <button id="startCallBtn">Start Call</button>
+  <button id="joinCallBtn" class="secondary">Join Call</button>
 </div>
 
-<button id="retryBtn" style="display:none;background:#f39c12;">Retry Connection</button>
+<div id="step1" class="step">
+  <p>1. Copy this code and send it to your friend:</p>
+  <textarea id="offerCode" readonly></textarea>
+  <button id="copyOfferBtn">Copy Code</button>
+</div>
 
-<div id="diag" style="font-size:14px;color:#2ecc71;margin-top:15px;max-width:340px;border:1px solid #333333;border-radius:8px;padding:10px;text-align:left;white-space:pre-wrap;"></div>
-<button id="copyDiagBtn" style="display:none;background:#555555;">Copy Diagnostics</button>
+<div id="step2" class="step">
+  <p>2. Paste the code your friend sends back here:</p>
+  <textarea id="answerInput" placeholder="Paste their reply code here"></textarea>
+  <button id="connectBtn">Connect</button>
+</div>
 
-<audio id="remoteAudio" autoplay playsinline></audio>
+<div id="joinStep1" class="step">
+  <p>1. Paste the code your friend sent you:</p>
+  <textarea id="offerInput" placeholder="Paste their code here"></textarea>
+  <button id="generateAnswerBtn">Generate Reply Code</button>
+</div>
+
+<div id="joinStep2" class="step">
+  <p>2. Copy this reply code and send it back to your friend:</p>
+  <textarea id="answerCode" readonly></textarea>
+  <button id="copyAnswerBtn">Copy Reply Code</button>
+</div>
+
+<div id="callControls" style="display:none;">
+  <button id="hangupBtn" class="danger">Hang Up</button>
+  <button id="muteBtn" class="secondary">Mute</button>
+</div>
+
 <button id="enableAudioBtn" style="display:none;background:#2ecc71;">Tap to Enable Audio</button>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<div id="diag"></div>
+<button id="copyDiagBtn" style="display:none;" class="secondary">Copy Diagnostics</button>
+
+<audio id="remoteAudio" autoplay playsinline></audio>
+
 <script>
 const PASSWORD = "why";
-const ROOM_ID = "why-shared-room-fixed";
+
+const XIRSYS_IDENT = "pokemore";
+const XIRSYS_SECRET = "1ad741e2-7a81-11f1-9963-0242ac150002";
+const XIRSYS_CHANNEL = "channel1adca0d8";
 
 const statusEl = document.getElementById('status');
 const passSection = document.getElementById('passSection');
-const callControls = document.getElementById('callControls');
 const passInput = document.getElementById('passInput');
 const enterBtn = document.getElementById('enterBtn');
+
+const chooseSection = document.getElementById('chooseSection');
+const startCallBtn = document.getElementById('startCallBtn');
+const joinCallBtn = document.getElementById('joinCallBtn');
+
+const step1 = document.getElementById('step1');
+const offerCode = document.getElementById('offerCode');
+const copyOfferBtn = document.getElementById('copyOfferBtn');
+
+const step2 = document.getElementById('step2');
+const answerInput = document.getElementById('answerInput');
+const connectBtn = document.getElementById('connectBtn');
+
+const joinStep1 = document.getElementById('joinStep1');
+const offerInput = document.getElementById('offerInput');
+const generateAnswerBtn = document.getElementById('generateAnswerBtn');
+
+const joinStep2 = document.getElementById('joinStep2');
+const answerCode = document.getElementById('answerCode');
+const copyAnswerBtn = document.getElementById('copyAnswerBtn');
+
+const callControls = document.getElementById('callControls');
 const hangupBtn = document.getElementById('hangupBtn');
 const muteBtn = document.getElementById('muteBtn');
-const retryBtn = document.getElementById('retryBtn');
-const remoteAudio = document.getElementById('remoteAudio');
 const enableAudioBtn = document.getElementById('enableAudioBtn');
+const remoteAudio = document.getElementById('remoteAudio');
+
 const diagEl = document.getElementById('diag');
 const copyDiagBtn = document.getElementById('copyDiagBtn');
 let diagLines = [];
@@ -117,27 +168,15 @@ copyDiagBtn.addEventListener('click', () => {
       copyDiagBtn.textContent = "Copied!";
       setTimeout(() => copyDiagBtn.textContent = "Copy Diagnostics", 1500);
     });
-  } else {
-    diagEl.focus();
   }
 });
 
-enableAudioBtn.addEventListener('click', () => {
-  remoteAudio.play().then(() => {
-    enableAudioBtn.style.display = 'none';
-  }).catch(() => {
-    statusEl.textContent = "Still couldn't play audio. Try again.";
-  });
-});
-
-let peer;
+let pc;
 let localStream;
-let currentCall;
 let muted = false;
 
-const XIRSYS_IDENT = "pokemore";
-const XIRSYS_SECRET = "1ad741e2-7a81-11f1-9963-0242ac150002";
-const XIRSYS_CHANNEL = "channel1adca0d8";
+function encode(obj) { return btoa(JSON.stringify(obj)); }
+function decode(str) { return JSON.parse(atob(str.trim())); }
 
 async function getIceServers() {
   try {
@@ -150,166 +189,148 @@ async function getIceServers() {
     });
     const data = await resp.json();
     if (data.s === "ok" && data.v && data.v.iceServers) {
-      log("Xirsys credentials fetched OK");
+      log("Xirsys TURN credentials fetched OK");
       return [data.v.iceServers];
-    } else {
-      log("Xirsys response unexpected: " + JSON.stringify(data));
-      return [{ urls: 'stun:stun.l.google.com:19302' }];
     }
+    log("Xirsys response unexpected, falling back to STUN only");
   } catch (e) {
-    log("Xirsys fetch FAILED: " + e.message);
-    return [{ urls: 'stun:stun.l.google.com:19302' }];
+    log("Xirsys fetch failed (" + e.message + "), falling back to STUN only");
+  }
+  return [{ urls: 'stun:stun.l.google.com:19302' }];
+}
+
+async function getMic() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log("Mic granted. Tracks: " + localStream.getAudioTracks().length);
+    return true;
+  } catch (e) {
+    statusEl.textContent = "Mic permission denied.";
+    log("Mic FAILED: " + e.name);
+    return false;
   }
 }
 
-enterBtn.addEventListener('click', async () => {
+async function createPeerConnection() {
+  const iceServers = await getIceServers();
+  pc = new RTCPeerConnection({ iceServers: iceServers });
+
+  pc.oniceconnectionstatechange = () => log("ICE state: " + pc.iceConnectionState);
+  pc.onconnectionstatechange = () => log("Connection state: " + pc.connectionState);
+
+  pc.ontrack = (e) => {
+    const tracks = e.streams[0].getAudioTracks();
+    log("Got remote stream. Audio tracks: " + tracks.length);
+    remoteAudio.srcObject = e.streams[0];
+    statusEl.textContent = "Connected — you're live!";
+    callControls.style.display = 'block';
+    const p = remoteAudio.play();
+    if (p !== undefined) {
+      p.then(() => log("audio.play() succeeded"))
+       .catch((err) => { log("audio.play() BLOCKED: " + err.name); enableAudioBtn.style.display = 'inline-block'; });
+    }
+  };
+
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+function waitForIceGathering() {
+  return new Promise((resolve) => {
+    if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') resolve();
+    });
+  });
+}
+
+enterBtn.addEventListener('click', () => {
   if (passInput.value.trim().toLowerCase() !== PASSWORD) {
     statusEl.textContent = "Wrong password.";
     return;
   }
   passSection.style.display = 'none';
-  statusEl.textContent = "Requesting mic...";
-  log("Tapped Enter. Requesting mic...");
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    log("Mic granted. Tracks: " + localStream.getAudioTracks().length);
-  } catch (e) {
-    statusEl.textContent = "Mic permission denied.";
-    log("Mic FAILED: " + e.name + " - " + e.message);
-    return;
-  }
-  connect();
+  chooseSection.style.display = 'block';
+  statusEl.textContent = "Start a call or join one.";
 });
 
-retryBtn.addEventListener('click', connect);
+startCallBtn.addEventListener('click', async () => {
+  statusEl.textContent = "Requesting mic...";
+  if (!(await getMic())) return;
+  chooseSection.style.display = 'none';
+  statusEl.textContent = "Creating call code...";
 
-async function connect() {
-  statusEl.textContent = "Connecting to server...";
-  retryBtn.style.display = 'none';
+  await createPeerConnection();
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForIceGathering();
 
-  if (peer) {
-    try { peer.destroy(); } catch (e) {}
-  }
+  offerCode.value = encode(pc.localDescription);
+  step1.style.display = 'block';
+  step2.style.display = 'block';
+  statusEl.textContent = "Send the code below to your friend.";
+});
 
-  // Try to become the host of the fixed room first
-  const iceServers = await getIceServers();
-  log("Using " + iceServers.length + " ICE servers from Xirsys");
-  peer = new Peer(ROOM_ID, {
-    debug: 1,
-    config: {
-      iceServers: iceServers,
-      iceTransportPolicy: 'relay'
-    }
-  });
+copyOfferBtn.addEventListener('click', () => {
+  offerCode.select();
+  document.execCommand('copy');
+  copyOfferBtn.textContent = "Copied!";
+  setTimeout(() => copyOfferBtn.textContent = "Copy Code", 1500);
+});
 
-  peer.on('open', () => {
-    statusEl.textContent = "Waiting for someone else to join...";
-    log("Peer server connected (as host). Waiting for other side...");
-  });
-
-  peer.on('call', (call) => {
+connectBtn.addEventListener('click', async () => {
+  try {
+    const answer = decode(answerInput.value);
+    await pc.setRemoteDescription(answer);
     statusEl.textContent = "Connecting...";
-    log("Incoming call received. Answering...");
-    call.answer(localStream);
-    setupCall(call);
-  });
-
-  peer.on('error', (err) => {
-    log("Peer error: " + err.type);
-    if (err.type === 'unavailable-id') {
-      // Someone is already hosting, so call them instead
-      joinAsCaller();
-    } else {
-      statusEl.textContent = "Connection error (" + err.type + "). Tap Retry.";
-      retryBtn.style.display = 'inline-block';
-    }
-  });
-
-  peer.on('disconnected', () => {
-    statusEl.textContent = "Disconnected. Tap Retry.";
-    retryBtn.style.display = 'inline-block';
-  });
-}
-
-async function joinAsCaller() {
-  statusEl.textContent = "Joining call...";
-  log("Room taken. Joining as caller instead...");
-  peer.destroy();
-  const iceServers2 = await getIceServers();
-  log("Using " + iceServers2.length + " ICE servers from Xirsys");
-  peer = new Peer({
-    debug: 1,
-    config: {
-      iceServers: iceServers2,
-      iceTransportPolicy: 'relay'
-    }
-  });
-
-  peer.on('open', () => {
-    const call = peer.call(ROOM_ID, localStream);
-    setupCall(call);
-  });
-
-  peer.on('error', (err) => {
-    statusEl.textContent = "Connection error (" + err.type + "). Tap Retry.";
-    retryBtn.style.display = 'inline-block';
-  });
-}
-
-function setupCall(call) {
-  currentCall = call;
-  callControls.style.display = 'block';
-  hangupBtn.style.display = 'inline-block';
-  muteBtn.style.display = 'inline-block';
-
-  const pc = call.peerConnection;
-  if (pc) {
-    pc.oniceconnectionstatechange = () => {
-      log("ICE state: " + pc.iceConnectionState);
-    };
-    pc.onconnectionstatechange = () => {
-      log("Connection state: " + pc.connectionState);
-    };
+    log("Remote answer applied. Waiting for connection...");
+  } catch (e) {
+    statusEl.textContent = "Invalid code. Ask your friend to resend it.";
+    log("Failed to apply answer: " + e.message);
   }
+});
 
-  call.on('stream', (remoteStream) => {
-    const tracks = remoteStream.getAudioTracks();
-    log("Got remote stream. Audio tracks: " + tracks.length + (tracks[0] ? (" | enabled: " + tracks[0].enabled + " | muted: " + tracks[0].muted) : ""));
-    remoteAudio.srcObject = remoteStream;
-    statusEl.textContent = "Connected — you're live!";
-    const playPromise = remoteAudio.play();
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        log(diagEl.textContent + " | audio.play() succeeded");
-      }).catch((err) => {
-        log(diagEl.textContent + " | audio.play() BLOCKED: " + err.name);
-        enableAudioBtn.style.display = 'inline-block';
-      });
-    }
-  });
+joinCallBtn.addEventListener('click', async () => {
+  statusEl.textContent = "Requesting mic...";
+  if (!(await getMic())) return;
+  chooseSection.style.display = 'none';
+  joinStep1.style.display = 'block';
+  statusEl.textContent = "Paste the code your friend sent you.";
+});
 
-  call.on('close', endCallUI);
-  call.on('error', endCallUI);
-}
+generateAnswerBtn.addEventListener('click', async () => {
+  try {
+    const offer = decode(offerInput.value);
+    await createPeerConnection();
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await waitForIceGathering();
+
+    answerCode.value = encode(pc.localDescription);
+    joinStep2.style.display = 'block';
+    statusEl.textContent = "Send this reply code back to your friend.";
+  } catch (e) {
+    statusEl.textContent = "Invalid code. Ask your friend to resend it.";
+    log("Failed to process offer: " + e.message);
+  }
+});
+
+copyAnswerBtn.addEventListener('click', () => {
+  answerCode.select();
+  document.execCommand('copy');
+  copyAnswerBtn.textContent = "Copied!";
+  setTimeout(() => copyAnswerBtn.textContent = "Copy Reply Code", 1500);
+});
+
+enableAudioBtn.addEventListener('click', () => {
+  remoteAudio.play().then(() => enableAudioBtn.style.display = 'none');
+});
 
 hangupBtn.addEventListener('click', () => {
-  if (currentCall) currentCall.close();
+  if (pc) pc.close();
   if (localStream) localStream.getTracks().forEach(t => t.stop());
-  if (peer) peer.destroy();
-  endCallUI();
+  location.reload();
 });
-
-function endCallUI() {
-  statusEl.textContent = "Call ended.";
-  passSection.style.display = 'block';
-  callControls.style.display = 'none';
-  hangupBtn.style.display = 'none';
-  muteBtn.style.display = 'none';
-  muteBtn.classList.remove('muted');
-  muteBtn.textContent = "Mute";
-  muted = false;
-  passInput.value = '';
-}
 
 muteBtn.addEventListener('click', () => {
   if (!localStream) return;
