@@ -78,7 +78,8 @@
 
 <button id="retryBtn" style="display:none;background:#f39c12;">Retry Connection</button>
 
-<div id="diag" style="font-size:11px;color:#666666;margin-top:15px;max-width:320px;"></div>
+<div id="diag" style="font-size:14px;color:#2ecc71;margin-top:15px;max-width:340px;border:1px solid #333333;border-radius:8px;padding:10px;text-align:left;white-space:pre-wrap;"></div>
+<button id="copyDiagBtn" style="display:none;background:#555555;">Copy Diagnostics</button>
 
 <audio id="remoteAudio" autoplay playsinline></audio>
 <button id="enableAudioBtn" style="display:none;background:#2ecc71;">Tap to Enable Audio</button>
@@ -99,11 +100,27 @@ const retryBtn = document.getElementById('retryBtn');
 const remoteAudio = document.getElementById('remoteAudio');
 const enableAudioBtn = document.getElementById('enableAudioBtn');
 const diagEl = document.getElementById('diag');
+const copyDiagBtn = document.getElementById('copyDiagBtn');
+let diagLines = [];
 
 function log(msg) {
-  diagEl.textContent = msg;
+  diagLines.push(msg);
+  diagEl.textContent = diagLines.join('\n');
+  copyDiagBtn.style.display = 'inline-block';
   console.log(msg);
 }
+
+copyDiagBtn.addEventListener('click', () => {
+  const text = diagLines.join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      copyDiagBtn.textContent = "Copied!";
+      setTimeout(() => copyDiagBtn.textContent = "Copy Diagnostics", 1500);
+    });
+  } else {
+    diagEl.focus();
+  }
+});
 
 enableAudioBtn.addEventListener('click', () => {
   remoteAudio.play().then(() => {
@@ -125,10 +142,13 @@ enterBtn.addEventListener('click', async () => {
   }
   passSection.style.display = 'none';
   statusEl.textContent = "Requesting mic...";
+  log("Tapped Enter. Requesting mic...");
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    log("Mic granted. Tracks: " + localStream.getAudioTracks().length);
   } catch (e) {
     statusEl.textContent = "Mic permission denied.";
+    log("Mic FAILED: " + e.name + " - " + e.message);
     return;
   }
   connect();
@@ -166,21 +186,25 @@ function connect() {
           username: 'openrelayproject',
           credential: 'openrelayproject'
         }
-      ]
+      ],
+      iceTransportPolicy: 'relay'
     }
   });
 
   peer.on('open', () => {
     statusEl.textContent = "Waiting for someone else to join...";
+    log("Peer server connected (as host). Waiting for other side...");
   });
 
   peer.on('call', (call) => {
     statusEl.textContent = "Connecting...";
+    log("Incoming call received. Answering...");
     call.answer(localStream);
     setupCall(call);
   });
 
   peer.on('error', (err) => {
+    log("Peer error: " + err.type);
     if (err.type === 'unavailable-id') {
       // Someone is already hosting, so call them instead
       joinAsCaller();
@@ -198,6 +222,7 @@ function connect() {
 
 function joinAsCaller() {
   statusEl.textContent = "Joining call...";
+  log("Room taken. Joining as caller instead...");
   peer.destroy();
   peer = new Peer({
     debug: 1,
@@ -220,7 +245,8 @@ function joinAsCaller() {
           username: 'openrelayproject',
           credential: 'openrelayproject'
         }
-      ]
+      ],
+      iceTransportPolicy: 'relay'
     }
   });
 
