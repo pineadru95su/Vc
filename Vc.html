@@ -79,7 +79,8 @@
 
 <button id="retryBtn">Retry Connection</button>
 
-<audio id="remoteAudio" autoplay></audio>
+<audio id="remoteAudio" autoplay playsinline></audio>
+<button id="enableAudioBtn" style="display:none;background:#2ecc71;">Tap to Enable Audio</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 <script>
@@ -94,6 +95,15 @@ const hangupBtn = document.getElementById('hangupBtn');
 const muteBtn = document.getElementById('muteBtn');
 const retryBtn = document.getElementById('retryBtn');
 const remoteAudio = document.getElementById('remoteAudio');
+const enableAudioBtn = document.getElementById('enableAudioBtn');
+
+enableAudioBtn.addEventListener('click', () => {
+  remoteAudio.play().then(() => {
+    enableAudioBtn.style.display = 'none';
+  }).catch(() => {
+    statusEl.textContent = "Still couldn't play audio. Try again.";
+  });
+});
 
 let peer;
 let localStream;
@@ -195,6 +205,12 @@ function setupCall(call) {
   call.on('stream', (remoteStream) => {
     remoteAudio.srcObject = remoteStream;
     statusEl.textContent = "Connected — you're live!";
+    const playPromise = remoteAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        enableAudioBtn.style.display = 'inline-block';
+      });
+    }
   });
 
   call.on('close', endCallUI);
