@@ -54,10 +54,9 @@
     color: #ffffff;
   }
   #enterBtn { background: #3498db; }
-  #hangupBtn { background: #e74c3c; display: none; }
-  #muteBtn { background: #333333; border: 1px solid #555555; display: none; color: #eeeeee; }
+  #hangupBtn { background: #e74c3c; }
+  #muteBtn { background: #333333; border: 1px solid #555555; color: #eeeeee; }
   #muteBtn.muted { background: #e67e22; }
-  #retryBtn { background: #f39c12; display: none; }
   #callControls { margin-top: 20px; }
 </style>
 </head>
@@ -72,12 +71,14 @@
   <button id="enterBtn">Enter</button>
 </div>
 
-<div id="callControls">
+<div id="callControls" style="display:none;">
   <button id="hangupBtn">Hang Up</button>
   <button id="muteBtn">Mute</button>
 </div>
 
-<button id="retryBtn">Retry Connection</button>
+<button id="retryBtn" style="display:none;background:#f39c12;">Retry Connection</button>
+
+<div id="diag" style="font-size:11px;color:#666666;margin-top:15px;max-width:320px;"></div>
 
 <audio id="remoteAudio" autoplay playsinline></audio>
 <button id="enableAudioBtn" style="display:none;background:#2ecc71;">Tap to Enable Audio</button>
@@ -89,6 +90,7 @@ const ROOM_ID = "why-shared-room-fixed";
 
 const statusEl = document.getElementById('status');
 const passSection = document.getElementById('passSection');
+const callControls = document.getElementById('callControls');
 const passInput = document.getElementById('passInput');
 const enterBtn = document.getElementById('enterBtn');
 const hangupBtn = document.getElementById('hangupBtn');
@@ -96,6 +98,12 @@ const muteBtn = document.getElementById('muteBtn');
 const retryBtn = document.getElementById('retryBtn');
 const remoteAudio = document.getElementById('remoteAudio');
 const enableAudioBtn = document.getElementById('enableAudioBtn');
+const diagEl = document.getElementById('diag');
+
+function log(msg) {
+  diagEl.textContent = msg;
+  console.log(msg);
+}
 
 enableAudioBtn.addEventListener('click', () => {
   remoteAudio.play().then(() => {
@@ -229,15 +237,31 @@ function joinAsCaller() {
 
 function setupCall(call) {
   currentCall = call;
+  callControls.style.display = 'block';
   hangupBtn.style.display = 'inline-block';
   muteBtn.style.display = 'inline-block';
 
+  const pc = call.peerConnection;
+  if (pc) {
+    pc.oniceconnectionstatechange = () => {
+      log("ICE state: " + pc.iceConnectionState);
+    };
+    pc.onconnectionstatechange = () => {
+      log("Connection state: " + pc.connectionState);
+    };
+  }
+
   call.on('stream', (remoteStream) => {
+    const tracks = remoteStream.getAudioTracks();
+    log("Got remote stream. Audio tracks: " + tracks.length + (tracks[0] ? (" | enabled: " + tracks[0].enabled + " | muted: " + tracks[0].muted) : ""));
     remoteAudio.srcObject = remoteStream;
     statusEl.textContent = "Connected — you're live!";
     const playPromise = remoteAudio.play();
     if (playPromise !== undefined) {
-      playPromise.catch(() => {
+      playPromise.then(() => {
+        log(diagEl.textContent + " | audio.play() succeeded");
+      }).catch((err) => {
+        log(diagEl.textContent + " | audio.play() BLOCKED: " + err.name);
         enableAudioBtn.style.display = 'inline-block';
       });
     }
@@ -257,6 +281,7 @@ hangupBtn.addEventListener('click', () => {
 function endCallUI() {
   statusEl.textContent = "Call ended.";
   passSection.style.display = 'block';
+  callControls.style.display = 'none';
   hangupBtn.style.display = 'none';
   muteBtn.style.display = 'none';
   muteBtn.classList.remove('muted');
